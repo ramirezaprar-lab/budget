@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expenses: Atelerix & Mephitis</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    /* ── COLORES — edita los valores hex para cambiar la apariencia ── */
+    --bg:      #ffffff;   /* fondo de tarjetas y formularios        */
+    --bg2:     #f8f8f8;   /* fondo de métricas y botones activos    */
+    --bg3:     #afc7d4;   /* fondo general de la página             */
+    --text:    #1a1a1a;   /* texto principal                        */
+    --text2:   #2e4853;   /* texto secundario (labels, fechas)      */
+    --text3:   #526266;   /* texto muy tenue (placeholders)         */
+    --border:  rgba(0,0,0,0.12);  /* bordes sutiles                 */
+    --border2: rgba(0,0,0,0.22);  /* bordes de inputs y selects     */
+    --radius: 8px; --radius-lg: 12px;
+    --success: #3B6D11;   /* verde: balance positivo                */
+    --danger:  #A32D2D;   /* rojo: deuda o balance negativo         */
+    --blue:    #378ADD;   /* azul: barras del gráfico categorías    */
+    --amber:   #BA7517;   /* naranja: dot de gastos personales      */
+    --green:   #639922;   /* verde: dot de transferencias           */
+    --purple:  #9B3FC0;   /* morado: dot de "pagué por ti"          */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+      --text: #e8e7e2; --text2: #9a9990; --text3: #666660;
+      --border: rgba(255,255,255,0.12); --border2: rgba(255,255,255,0.22);
+      --success: #97C459; --danger: #F09595;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
+  .app { max-width: 700px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+  .header { margin-bottom: 1.5rem; display: flex; align-items: flex-start; justify-content: space-between; }
+  .header h1 { font-size: 22px; font-weight: 500; }
+  .header p { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
+  .tab { padding: 9px 16px; font-size: 13px; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; font-family: inherit; }
+  .tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .metric { background: var(--bg2); border-radius: var(--radius); padding: 14px 16px; }
+  .metric label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 6px; }
+  .metric .val { font-size: 20px; font-weight: 500; }
+  .metric .sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .card h3 { font-size: 14px; font-weight: 500; margin-bottom: 1rem; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; color: var(--text2); }
+  .form-group input, .form-group select {
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    padding: 8px 10px; font-size: 13px; font-family: inherit;
+    background: var(--bg); color: var(--text); width: 100%;
+    -webkit-appearance: none; appearance: none;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--text); }
+  .radio-group { display: flex; gap: 6px; margin-bottom: 0.5rem; flex-wrap: wrap; }
+  .radio-btn { border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 8px 12px; font-size: 12px; text-align: center; cursor: pointer; color: var(--text2); background: var(--bg); transition: all .15s; white-space: nowrap; }
+  .radio-btn.active { background: var(--bg2); color: var(--text); border-color: var(--text); font-weight: 500; }
+  .btn-primary { width: 100%; padding: 10px; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 4px; font-family: inherit; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { padding: 8px 14px; background: var(--bg2); color: var(--text); border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 13px; cursor: pointer; font-family: inherit; }
+  .btn-export { padding: 7px 14px; background: var(--bg); color: var(--text2); border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 12px; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .btn-export:hover { background: var(--bg2); color: var(--text); }
+  .export-row { display: flex; gap: 8px; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+  .export-row span { font-size: 12px; color: var(--text3); }
+  .tx-list { display: flex; flex-direction: column; gap: 6px; }
+  .tx-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius); }
+  .tx-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tx-body { flex: 1; min-width: 0; }
+  .tx-desc { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-meta { font-size: 11px; color: var(--text2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-amount { font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .tx-tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .tag-shared { background: #E6F1FB; color: #0C447C; }
+  .tag-solo { background: #FAEEDA; color: #633806; }
+  .tag-transfer { background: #EAF3DE; color: #27500A; }
+  .tag-pague { background: #F3E8FB; color: #4A0C7C; }
+  .empty { text-align: center; padding: 2.5rem; color: var(--text3); font-size: 13px; }
+  .tx-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
+  .tx-del:hover { color: var(--danger); }
+  .tx-edit { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 15px; padding: 0 4px; line-height: 1; }
+  .tx-edit:hover { color: var(--text); }
+  .month-selector { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+  .month-selector select { font-size: 13px; color: var(--text); background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 6px 10px; font-family: inherit; }
+  .debt-item { border-radius: var(--radius); padding: 10px 14px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
+  .debt-item.owes { background: #FAECE7; color: #4A1B0C; }
+  .debt-item.even { background: #EAF3DE; color: #173404; }
+  .debt-item strong { font-weight: 500; }
+  .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .cat-bar-wrap { flex: 1; height: 5px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
+  .cat-bar { height: 100%; border-radius: 4px; background: var(--blue); }
+  .cat-label { font-size: 12px; color: var(--text2); width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cat-amt { font-size: 12px; font-weight: 500; width: 80px; text-align: right; }
+  .person-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
+  .person-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg2); border-radius: var(--radius); font-size: 13px; }
+  .person-item span { flex: 1; }
+  .person-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .person-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
+  .person-del:hover { color: var(--danger); }
+  .add-person-row { display: flex; gap: 8px; }
+  .add-person-row input { flex: 1; border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); }
+  .add-person-row input:focus { outline: none; border-color: var(--text); }
+  .hint { font-size: 12px; color: var(--text2); margin-bottom: 1rem; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius); }
+  .participants-wrap { margin-bottom: 10px; }
+  .participants-title { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .participants-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .check-label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; padding: 6px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg); }
+  .check-label input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; }
+  @media (max-width: 480px) {
+    .form-row { grid-template-columns: 1fr; }
+    .radio-group { flex-direction: column; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>Expenses: Atelerix & Mephitis</h1>
+      <p id="current-month-label"></p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('resumen')">Resumen</button>
+    <button class="tab" onclick="switchTab('agregar')">+ Agregar</button>
+    <button class="tab" onclick="switchTab('movimientos')">Movimientos</button>
+    <button class="tab" onclick="switchTab('personas')">Personas</button>
+  </div>
+
+  <!-- RESUMEN -->
+  <div class="section active" id="tab-resumen">
+    <div class="month-selector">
+      <label style="font-size:12px;color:var(--text2)">Mes:</label>
+      <select id="month-filter" onchange="renderResumen()"></select>
+    </div>
+    <div class="metric-grid" id="metrics-top"></div>
+    <div class="card">
+      <h3>quién le debe a quién</h3>
+      <div id="debt-matrix"></div>
+    </div>
+    <div class="card">
+      <h3>gasto por persona</h3>
+      <div id="per-person-chart"></div>
+    </div>
+    <div class="card">
+      <h3>gastos por categoría</h3>
+      <div id="cat-chart"></div>
+    </div>
+  </div>
+
+  <!-- AGREGAR / EDITAR -->
+  <div class="section" id="tab-agregar">
+    <div class="card">
+      <h3 id="form-title">tipo de movimiento</h3>
+      <div class="radio-group">
+        <div class="radio-btn active" id="type-compartido"    onclick="setType('compartido')">Compartido</div>
+        <div class="radio-btn"        id="type-personal"      onclick="setType('personal')">Personal</div>
+        <div class="radio-btn"        id="type-pague"         onclick="setType('pague')">Pagué por alguien</div>
+        <div class="radio-btn"        id="type-transferencia" onclick="setType('transferencia')">Transferencia</div>
+      </div>
+      <p id="type-hint" class="hint"></p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Descripción</label>
+          <input id="f-desc" type="text" placeholder="ej. supermercado">
+        </div>
+        <div class="form-group">
+          <label>Monto ($)</label>
+          <input id="f-amount" type="number" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label id="payer-label">Quién pagó</label>
+          <select id="f-payer"></select>
+        </div>
+        <div class="form-group" id="f-receiver-group" style="display:none">
+          <label id="receiver-label">A favor de quién</label>
+          <select id="f-receiver"></select>
+        </div>
+        <div class="form-group">
+          <label>Fecha</label>
+          <input id="f-date" type="date">
+        </div>
+      </div>
+
+      <!-- Participantes (solo en modo compartido) -->
+      <div id="f-participants-group" class="participants-wrap" style="display:none">
+        <p class="participants-title">¿Quiénes participan en este gasto?</p>
+        <div id="f-participants" class="participants-checks"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Categoría</label>
+          <select id="f-cat">
+            <option>supermercado</option>
+            <option>restaurante</option>
+            <option>transporte</option>
+            <option>entretenimiento</option>
+            <option>servicios</option>
+            <option>salud</option>
+            <option>ropa</option>
+            <option>otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Forma de pago</label>
+          <select id="f-payment">
+            <option value="efectivo">Efectivo</option>
+            <option value="debito">Tarjeta de débito</option>
+            <option value="credito">Tarjeta de crédito</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary" id="form-save-btn" onclick="saveTransaction()">guardar movimiento</button>
+        <button class="btn-secondary" id="form-cancel-btn" style="display:none;white-space:nowrap;" onclick="cancelEdit()">cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOVIMIENTOS -->
+  <div class="section" id="tab-movimientos">
+    <div class="month-selector">
+      <label style="font-size:12px;color:var(--text2)">Mes:</label>
+      <select id="month-filter2" onchange="renderMovimientos()"></select>
+    </div>
+    <div class="export-row">
+      <span>Exportar:</span>
+      <button class="btn-export" onclick="exportCSV()">↓ CSV mes</button>
+      <button class="btn-export" onclick="exportXLSX()">↓ XLSX mes</button>
+      <button class="btn-export" onclick="exportAllCSV()">↓ CSV completo</button>
+    </div>
+    <div class="export-row">
+      <span>Importar:</span>
+      <label class="btn-export" style="cursor:pointer;">
+        ↑ CSV
+        <input type="file" accept=".csv" id="import-csv-input" style="display:none" onchange="importCSV(this)">
+      </label>
+      <span id="import-status" style="font-size:12px;color:var(--text2);"></span>
+    </div>
+    <div class="tx-list" id="tx-list"></div>
+  </div>
+
+  <!-- PERSONAS -->
+  <div class="section" id="tab-personas">
+    <div class="card">
+      <h3>participantes</h3>
+      <div class="person-list" id="person-list"></div>
+      <div class="add-person-row">
+        <input id="new-person-name" type="text" placeholder="Nombre del nuevo participante" maxlength="30"
+          onkeydown="if(event.key==='Enter') addPerson()">
+        <button class="btn-secondary" onclick="addPerson()">Agregar</button>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-top:.5rem;">
+      Solo puedes eliminar personas sin movimientos registrados.
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+// Paleta de colores para identificar a cada persona visualmente
+const PERSON_COLORS = ['#378ADD','#BA7517','#639922','#9B3FC0','#C0403F','#1E9E8F','#E07B39','#5C6BC0'];
+
+const TYPE_HINTS = {
+  compartido:    'El monto se divide en partes iguales entre los participantes seleccionados.',
+  personal:      'Gasto solo de una persona. No afecta el balance compartido.',
+  pague:         'Alguien pagó un gasto que era de otra persona. El beneficiario queda debiendo ese monto.',
+  transferencia: 'Pago directo de dinero entre dos personas. Se aplica al balance y reduce deudas.'
+};
+
+let people = [];  // [{ id, name }]
+let data   = [];  // transacciones
+let txType = 'compartido';
+
+// ── Persistencia ──
+function save() {
+  try {
+    localStorage.setItem('finanzas_v2_people', JSON.stringify(people));
+    localStorage.setItem('finanzas_v2_data',   JSON.stringify(data));
+  } catch(e) {}
+}
+
+function load() {
+  try {
+    const p = localStorage.getItem('finanzas_v2_people');
+    const d = localStorage.getItem('finanzas_v2_data');
+    if (p) people = JSON.parse(p);
+    if (d) data   = JSON.parse(d);
+
+    // Migración automática desde versión anterior (A / E como IDs fijos)
+    if (!people.length) {
+      const old = localStorage.getItem('finanzas_pareja_v1');
+      if (old) {
+        const oldData = JSON.parse(old);
+        const idA = uid(), idE = uid();
+        people = [{ id: idA, name: 'A' }, { id: idE, name: 'E' }];
+        data = oldData.map(t => ({
+          ...t,
+          payer:    t.payer    === 'A' ? idA : idE,
+          receiver: t.receiver === 'A' ? idA : t.receiver === 'B' ? idE : null,
+          participants: t.type === 'compartido' ? [idA, idE] : null
+        }));
+        save();
+      } else {
+        // Valores por defecto si no hay datos previos
+        people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
+        save();
+      }
+    }
+  } catch(e) { people = []; data = []; }
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function personName(id)  { return people.find(p => p.id === id)?.name || id; }
+function personColor(id) {
+  const idx = people.findIndex(p => p.id === id);
+  return PERSON_COLORS[Math.max(0, idx) % PERSON_COLORS.length];
+}
+
+// ── Personas ──
+function renderPersonas() {
+  const list = document.getElementById('person-list');
+  if (!people.length) { list.innerHTML = '<div class="empty">sin participantes</div>'; return; }
+  list.innerHTML = people.map(p => {
+    const inUse = data.some(t =>
+      t.payer === p.id || t.receiver === p.id || (t.participants||[]).includes(p.id)
+    );
+    return `<div class="person-item">
+      <div class="person-dot" style="background:${personColor(p.id)}"></div>
+      <span>${p.name}</span>
+      ${!inUse
+        ? `<button class="person-del" onclick="deletePerson('${p.id}')" title="Eliminar">×</button>`
+        : '<span style="font-size:11px;color:var(--text3)">en uso</span>'}
+    </div>`;
+  }).join('');
+}
+
+function addPerson() {
+  const input = document.getElementById('new-person-name');
+  const name  = input.value.trim();
+  if (!name) return;
+  if (people.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    alert('Ya existe un participante con ese nombre'); return;
+  }
+  people.push({ id: uid(), name });
+  input.value = '';
+  save();
+  renderAll();
+}
+
+function deletePerson(id) {
+  const inUse = data.some(t =>
+    t.payer === id || t.receiver === id || (t.participants||[]).includes(id)
+  );
+  if (inUse) { alert('Esta persona tiene movimientos registrados y no puede eliminarse'); return; }
+  people = people.filter(p => p.id !== id);
+  save();
+  renderAll();
+}
+
+// ── Formulario ──
+function setType(t) {
+  txType = t;
+  ['compartido','personal','pague','transferencia'].forEach(x =>
+    document.getElementById('type-' + x).classList.toggle('active', x === t)
+  );
+  document.getElementById('type-hint').textContent = TYPE_HINTS[t];
+  const showReceiver     = t === 'transferencia' || t === 'pague';
+  const showParticipants = t === 'compartido';
+  document.getElementById('f-receiver-group').style.display     = showReceiver ? 'block' : 'none';
+  document.getElementById('f-participants-group').style.display = showParticipants ? 'block' : 'none';
+  document.getElementById('payer-label').textContent    = t === 'transferencia' ? 'Quién envió' : 'Quién pagó';
+  document.getElementById('receiver-label').textContent = t === 'transferencia' ? 'Quién recibió' : 'Gasto de quién';
+}
+
+function populateSelects() {
+  const opts = people.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  document.getElementById('f-payer').innerHTML    = opts;
+  document.getElementById('f-receiver').innerHTML = opts;
+
+  // Checkboxes de participantes para modo compartido
+  document.getElementById('f-participants').innerHTML = people.map(p =>
+    `<label class="check-label">
+      <input type="checkbox" value="${p.id}" checked> ${p.name}
+    </label>`
+  ).join('');
+}
+
+function getParticipants() {
+  return [...document.querySelectorAll('#f-participants input:checked')].map(i => i.value);
+}
+
+// ID del movimiento que se está editando (null = modo agregar)
+function editTransaction(id) {
+  const t = data.find(tx => tx.id === id);
+  if (!t) return;
+  editingId = id;
+
+  // Cambiar UI a modo edición
+  document.getElementById('form-title').textContent    = 'editar movimiento';
+  document.getElementById('form-save-btn').textContent = 'guardar cambios';
+  document.getElementById('form-cancel-btn').style.display = 'block';
+
+  // Pre-llenar tipo y formulario
+  setType(t.type);
+  document.getElementById('f-desc').value   = t.desc;
+  document.getElementById('f-amount').value = t.amount;
+  document.getElementById('f-date').value   = t.date;
+
+  // Selects de personas (populateSelects ya corrió al abrir tab)
+  populateSelects();
+  document.getElementById('f-payer').value   = t.payer;
+  if (t.receiver) document.getElementById('f-receiver').value = t.receiver;
+
+  // Participantes en modo compartido
+  if (t.type === 'compartido' && t.participants) {
+    document.querySelectorAll('#f-participants input[type=checkbox]').forEach(cb => {
+      cb.checked = t.participants.includes(cb.value);
+    });
+  }
+
+  // Categoría y forma de pago
+  const catSel = document.getElementById('f-cat');
+  [...catSel.options].forEach(o => { if (o.value === t.cat || o.text === t.cat) catSel.value = o.value; });
+  document.getElementById('f-payment').value = t.payment || 'efectivo';
+
+  switchTab('agregar');
+}
+
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('form-title').textContent    = 'tipo de movimiento';
+  document.getElementById('form-save-btn').textContent = 'guardar movimiento';
+  document.getElementById('form-cancel-btn').style.display = 'none';
+  document.getElementById('f-desc').value   = '';
+  document.getElementById('f-amount').value = '';
+  setType('compartido');
+}
+
+function saveTransaction() {
+  const desc     = document.getElementById('f-desc').value.trim();
+  const amount   = parseFloat(document.getElementById('f-amount').value);
+  const payer    = document.getElementById('f-payer').value;
+  const receiver = document.getElementById('f-receiver').value;
+  const date     = document.getElementById('f-date').value;
+  const cat      = document.getElementById('f-cat').value;
+  const payment  = document.getElementById('f-payment').value;
+
+  if (!desc || !amount || amount <= 0 || !date) { alert('Completa todos los campos'); return; }
+  if ((txType === 'transferencia' || txType === 'pague') && payer === receiver) {
+    alert('El pagador y el receptor no pueden ser la misma persona'); return;
+  }
+
+  let participants = null;
+  if (txType === 'compartido') {
+    participants = getParticipants();
+    if (participants.length < 2) { alert('Selecciona al menos 2 participantes'); return; }
+  }
+
+  const needsReceiver = txType === 'transferencia' || txType === 'pague';
+  const tx = {
+    id: editingId || Date.now(),
+    desc, amount, payer,
+    receiver: needsReceiver ? receiver : null,
+    participants,
+    date, cat, payment, type: txType
+  };
+
+  if (editingId) {
+    // Reemplazar el movimiento existente
+    const idx = data.findIndex(t => t.id === editingId);
+    if (idx >= 0) data[idx] = tx;
+    cancelEdit();
+  } else {
+    data.push(tx);
+    document.getElementById('f-desc').value   = '';
+    document.getElementById('f-amount').value = '';
+  }
+
+  save();
+  renderAll();
+  switchTab('movimientos');
+}
+
+function deleteTransaction(id) {
+  if (!confirm('¿Eliminar este movimiento?')) return;
+  data = data.filter(t => t.id !== id);
+  save();
+  renderAll();
+}
+
+// ── Meses ──
+function getMonths() {
+  const set = new Set(data.map(t => t.date.slice(0,7)));
+  set.add(new Date().toISOString().slice(0,7));
+  return [...set].sort().reverse();
+}
+
+function populateMonthSelectors() {
+  const months = getMonths();
+  ['month-filter','month-filter2'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    const cur = sel.value;
+    sel.innerHTML = months.map(m => {
+      const [y,mo] = m.split('-');
+      const label  = new Date(y, mo-1, 1).toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+      return `<option value="${m}">${label}</option>`;
+    }).join('');
+    if (cur && months.includes(cur)) sel.value = cur;
+  });
+}
+
+function getSelected(id) { return document.getElementById(id).value; }
+function filteredData(month) { return data.filter(t => t.date.slice(0,7) === month); }
+function fmt(n) { return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+// ── Balance: calcula quién le debe cuánto a quién ──
+function calcBalance(txs) {
+  // deuda[a][b] = a le debe a b
+  const deuda = {};
+  people.forEach(p => { deuda[p.id] = {}; people.forEach(q => { deuda[p.id][q.id] = 0; }); });
+
+  txs.forEach(t => {
+    if (t.type === 'compartido') {
+      const parts = t.participants || people.map(p => p.id);
+      const share = t.amount / parts.length;
+      parts.forEach(pid => {
+        if (pid !== t.payer && deuda[pid]) deuda[pid][t.payer] = (deuda[pid][t.payer]||0) + share;
+      });
+    } else if (t.type === 'pague') {
+      // Pagador cubrió el gasto del beneficiario → beneficiario le debe al pagador
+      if (deuda[t.receiver] && t.payer) deuda[t.receiver][t.payer] = (deuda[t.receiver][t.payer]||0) + t.amount;
+    } else if (t.type === 'transferencia') {
+      // El emisor transfirió al receptor → reduce la deuda del emisor hacia el receptor
+      if (deuda[t.payer]) {
+        const actual = deuda[t.payer][t.receiver] || 0;
+        if (t.amount <= actual) {
+          deuda[t.payer][t.receiver] = actual - t.amount;
+        } else {
+          deuda[t.payer][t.receiver] = 0;
+          // Si transfirió de más, el receptor ahora le debe al emisor
+          if (deuda[t.receiver]) deuda[t.receiver][t.payer] = (deuda[t.receiver][t.payer]||0) + (t.amount - actual);
+        }
+      }
+    }
+  });
+
+  // Netear deudas mutuas: si A→B=100 y B→A=40 → A→B=60 y B→A=0
+  people.forEach(p => {
+    people.forEach(q => {
+      if (p.id >= q.id) return;
+      const ab = deuda[p.id]?.[q.id] || 0;
+      const ba = deuda[q.id]?.[p.id] || 0;
+      if (ab >= ba) { deuda[p.id][q.id] = ab - ba; deuda[q.id][p.id] = 0; }
+      else          { deuda[q.id][p.id] = ba - ab; deuda[p.id][q.id] = 0; }
+    });
+  });
+
+  return deuda;
+}
+
+// ── Resumen ──
+function renderResumen() {
+  const month = getSelected('month-filter');
+  const txs   = filteredData(month);
+
+  let totalGeneral = 0, totalCompartido = 0;
+  const gastoPorPersona = {};
+  people.forEach(p => { gastoPorPersona[p.id] = 0; });
+
+  txs.forEach(t => {
+    if (t.type === 'personal') {
+      totalGeneral += t.amount;
+      if (gastoPorPersona[t.payer] !== undefined) gastoPorPersona[t.payer] += t.amount;
+    } else if (t.type === 'compartido') {
+      totalGeneral     += t.amount;
+      totalCompartido  += t.amount;
+      const parts = t.participants || people.map(p => p.id);
+      const share = t.amount / parts.length;
+      parts.forEach(pid => { if (gastoPorPersona[pid] !== undefined) gastoPorPersona[pid] += share; });
+    } else if (t.type === 'pague') {
+      totalGeneral += t.amount;
+      if (gastoPorPersona[t.receiver] !== undefined) gastoPorPersona[t.receiver] += t.amount;
+    }
+    // Las transferencias no cuentan como gasto
+  });
+
+  // Métricas superiores
+  const avgCompartido = people.length ? totalCompartido / people.length : 0;
+  document.getElementById('metrics-top').innerHTML = `
+    <div class="metric"><label>total gastado</label><div class="val">${fmt(totalGeneral)}</div><div class="sub">entre todos</div></div>
+    <div class="metric"><label>compartido</label><div class="val">${fmt(totalCompartido)}</div><div class="sub">${fmt(avgCompartido)} c/u aprox.</div></div>
+    ${people.map(p => `<div class="metric"><label>${p.name}</label><div class="val">${fmt(gastoPorPersona[p.id]||0)}</div></div>`).join('')}
+  `;
+
+  // Deudas entre personas
+  const deuda = calcBalance(txs);
+  let debtHtml = '';
+  let hayDeudas = false;
+  people.forEach(p => {
+    people.forEach(q => {
+      if (p.id === q.id) return;
+      const monto = deuda[p.id]?.[q.id] || 0;
+      if (monto > 0.5) {
+        hayDeudas = true;
+        debtHtml += `<div class="debt-item owes">
+          <span><strong>${p.name}</strong> le debe a <strong>${q.name}</strong></span>
+          <strong>${fmt(monto)}</strong>
+        </div>`;
+      }
+    });
+  });
+  if (!hayDeudas) debtHtml = '<div class="debt-item even">Están a mano. Sin deudas pendientes.</div>';
+  document.getElementById('debt-matrix').innerHTML = debtHtml;
+
+  // Barras por persona
+  const maxGasto = Math.max(...Object.values(gastoPorPersona), 1);
+  document.getElementById('per-person-chart').innerHTML = people.length
+    ? people.map(p => `
+      <div class="cat-row">
+        <span class="cat-label" style="color:${personColor(p.id)};font-weight:500;">${p.name}</span>
+        <div class="cat-bar-wrap"><div class="cat-bar" style="width:${((gastoPorPersona[p.id]||0)/maxGasto*100).toFixed(1)}%;background:${personColor(p.id)}"></div></div>
+        <span class="cat-amt">${fmt(gastoPorPersona[p.id]||0)}</span>
+      </div>`).join('')
+    : '<div class="empty">sin participantes</div>';
+
+  // Barras por categoría
+  const cats = {};
+  txs.filter(t => t.type !== 'transferencia').forEach(t => {
+    if (!cats[t.cat]) cats[t.cat] = 0; cats[t.cat] += t.amount;
+  });
+  const sorted = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+  const maxCat = sorted[0]?.[1] || 1;
+  document.getElementById('cat-chart').innerHTML = sorted.length
+    ? sorted.map(([cat,amt]) => `
+      <div class="cat-row">
+        <span class="cat-label">${cat}</span>
+        <div class="cat-bar-wrap"><div class="cat-bar" style="width:${(amt/maxCat*100).toFixed(1)}%"></div></div>
+        <span class="cat-amt">${fmt(amt)}</span>
+      </div>`).join('')
+    : '<div class="empty">sin datos este mes</div>';
+}
+
+// ── Movimientos ──
+function renderMovimientos() {
+  const month = getSelected('month-filter2');
+  const txs   = filteredData(month).slice().reverse();
+  const list  = document.getElementById('tx-list');
+  if (!txs.length) { list.innerHTML = '<div class="empty">sin movimientos este mes</div>'; return; }
+  list.innerHTML = txs.map(t => {
+    const dot = t.type==='compartido'    ? '#378ADD'
+               : t.type==='transferencia'? '#639922'
+               : t.type==='pague'        ? '#9B3FC0' : '#BA7517';
+    const tag = t.type==='compartido'    ? '<span class="tx-tag tag-shared">compartido</span>'
+               : t.type==='transferencia'? '<span class="tx-tag tag-transfer">transferencia</span>'
+               : t.type==='pague'        ? '<span class="tx-tag tag-pague">pagué por ti</span>'
+               :                          '<span class="tx-tag tag-solo">personal</span>';
+    const who = t.type==='transferencia' ? `${personName(t.payer)} → ${personName(t.receiver)}`
+               : t.type==='pague'         ? `${personName(t.payer)} pagó por ${personName(t.receiver)}`
+               : t.type==='compartido'    ? `pagó ${personName(t.payer)} · ${(t.participants||people.map(p=>p.id)).map(personName).join(', ')}`
+               :                           `pagó ${personName(t.payer)}`;
+    const dateStr = new Date(t.date+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+    const payLbl  = t.payment==='credito' ? 'crédito' : t.payment==='debito' ? 'débito' : 'efectivo';
+    return `<div class="tx-item">
+      <div class="tx-dot" style="background:${dot}"></div>
+      <div class="tx-body">
+        <div class="tx-desc">${t.desc}</div>
+        <div class="tx-meta">${dateStr} · ${who} · ${t.cat} · ${payLbl} ${tag}</div>
+      </div>
+      <div class="tx-amount">${fmt(t.amount)}</div>
+      <button class="tx-edit" onclick="editTransaction(${t.id})" title="Editar">✎</button>
+      <button class="tx-del" onclick="deleteTransaction(${t.id})" title="Eliminar">×</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Exportar ──
+function buildRows(txs) {
+  const headers = ['Fecha','Descripción','Monto','Tipo','Quién pagó','Receptor/Beneficiario','Participantes','Categoría','Forma de pago'];
+  return [headers, ...txs.map(t => [
+    t.date, t.desc, t.amount,
+    t.type==='compartido' ? 'Compartido' : t.type==='personal' ? 'Personal' : t.type==='pague' ? 'Pagué por ti' : 'Transferencia',
+    personName(t.payer),
+    t.receiver ? personName(t.receiver) : '',
+    t.participants ? t.participants.map(personName).join(', ') : '',
+    t.cat,
+    t.payment==='credito' ? 'Tarjeta de crédito' : t.payment==='debito' ? 'Tarjeta de débito' : 'Efectivo'
+  ])];
+}
+function exportCSV() {
+  const txs = filteredData(getSelected('month-filter2'));
+  if (!txs.length) { alert('No hay movimientos en este mes'); return; }
+  const csv = buildRows(txs).map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}), `finanzas_${getSelected('month-filter2')}.csv`);
+}
+function exportAllCSV() {
+  if (!data.length) { alert('No hay movimientos registrados'); return; }
+  const txs = [...data].sort((a,b)=>a.date.localeCompare(b.date));
+  const csv = buildRows(txs).map(r => r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}), 'finanzas_completo.csv');
+}
+function exportXLSX() {
+  const month = getSelected('month-filter2');
+  const txs = filteredData(month);
+  if (!txs.length) { alert('No hay movimientos en este mes'); return; }
+  const ws = XLSX.utils.aoa_to_sheet(buildRows(txs));
+  ws['!cols'] = [10,30,12,14,12,14,24,16,18].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Movimientos');
+  XLSX.writeFile(wb, `finanzas_${month}.xlsx`);
+}
+// ── Importar CSV (formato propio de la app) ──
+function importCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('import-status');
+  status.textContent = 'Leyendo archivo...';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      // Quitar BOM si existe y dividir en líneas
+      const text  = e.target.result.replace(/^\uFEFF/, '');
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { status.textContent = '⚠ El archivo está vacío.'; return; }
+
+      // Parsear CSV respetando comillas
+      function parseRow(line) {
+        const result = []; let cur = ''; let inQ = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+            else inQ = !inQ;
+          } else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+          else cur += ch;
+        }
+        result.push(cur.trim());
+        return result;
+      }
+
+      const headers = parseRow(lines[0]).map(h => h.toLowerCase());
+      // Columnas esperadas: Fecha, Descripción, Monto, Tipo, Quién pagó,
+      //                     Receptor/Beneficiario, Participantes, Categoría, Forma de pago
+      const iDate   = headers.findIndex(h => h.includes('fecha'));
+      const iDesc   = headers.findIndex(h => h.includes('descripci'));
+      const iAmount = headers.findIndex(h => h.includes('monto'));
+      const iType   = headers.findIndex(h => h.includes('tipo'));
+      const iPayer  = headers.findIndex(h => h.includes('pag'));
+      const iRec    = headers.findIndex(h => h.includes('receptor') || h.includes('beneficiario'));
+      const iParts  = headers.findIndex(h => h.includes('participantes'));
+      const iCat    = headers.findIndex(h => h.includes('categor'));
+      const iPaymet = headers.findIndex(h => h.includes('forma'));
+
+      if (iDate < 0 || iDesc < 0 || iAmount < 0) {
+        status.textContent = '⚠ El archivo no tiene el formato correcto. Usa un CSV exportado desde esta app.';
+        return;
+      }
+
+      // Función para buscar o crear persona por nombre
+      function findOrCreatePerson(name) {
+        if (!name) return null;
+        let p = people.find(p => p.name.toLowerCase() === name.toLowerCase());
+        if (!p) { p = { id: uid(), name }; people.push(p); }
+        return p.id;
+      }
+
+      // Mapeo de tipo (texto → código interno)
+      function parseType(str) {
+        const s = (str||'').toLowerCase();
+        if (s.includes('compartido')) return 'compartido';
+        if (s.includes('personal'))   return 'personal';
+        if (s.includes('pagu'))       return 'pague';
+        return 'transferencia';
+      }
+      function parsePayment(str) {
+        const s = (str||'').toLowerCase();
+        if (s.includes('cr')) return 'credito';
+        if (s.includes('d')) return 'debito';
+        return 'efectivo';
+      }
+
+      let imported = 0, skipped = 0;
+      const existingIds = new Set(data.map(t => t.date + '|' + t.desc + '|' + t.amount));
+
+      for (let i = 1; i < lines.length; i++) {
+        const row = parseRow(lines[i]);
+        if (row.length < 3) continue;
+
+        const date   = row[iDate]   || '';
+        const desc   = row[iDesc]   || '';
+        const amount = parseFloat(row[iAmount]);
+        if (!date || !desc || isNaN(amount)) { skipped++; continue; }
+
+        // Evitar duplicados exactos (misma fecha + descripción + monto)
+        const key = `${date}|${desc}|${amount}`;
+        if (existingIds.has(key)) { skipped++; continue; }
+        existingIds.add(key);
+
+        const type      = parseType(row[iType]);
+        const payerName = iPayer >= 0 ? row[iPayer] : '';
+        const recName   = iRec   >= 0 ? row[iRec]   : '';
+        const partsRaw  = iParts >= 0 ? row[iParts]  : '';
+        const cat       = iCat   >= 0 ? row[iCat]    : 'otro';
+        const payment   = parsePayment(iPaymet >= 0 ? row[iPaymet] : '');
+
+        const payerId  = findOrCreatePerson(payerName);
+        const recId    = recName ? findOrCreatePerson(recName) : null;
+        const partIds  = partsRaw
+          ? partsRaw.split(',').map(n => findOrCreatePerson(n.trim())).filter(Boolean)
+          : (type === 'compartido' ? people.map(p => p.id) : null);
+
+        data.push({
+          id: Date.now() + i,
+          desc, amount, date, cat, payment, type,
+          payer: payerId,
+          receiver: (type === 'transferencia' || type === 'pague') ? recId : null,
+          participants: type === 'compartido' ? partIds : null
+        });
+        imported++;
+      }
+
+      save();
+      renderAll();
+      // Limpiar input para permitir reimportar el mismo archivo
+      input.value = '';
+      status.textContent = `✓ ${imported} movimientos importados${skipped ? `, ${skipped} omitidos (duplicados o incompletos)` : ''}.`;
+      setTimeout(() => { status.textContent = ''; }, 5000);
+
+    } catch(err) {
+      status.textContent = '⚠ Error al leer el archivo. Verifica que sea un CSV válido.';
+      console.error(err);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+// ── General ──
+function renderAll() {
+  populateMonthSelectors();
+  populateSelects();
+  renderResumen();
+  renderMovimientos();
+  renderPersonas();
+}
+
+function switchTab(name) {
+  const tabs = ['resumen','agregar','movimientos','personas'];
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', tabs[i]===name));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if (name==='resumen')     renderResumen();
+  if (name==='movimientos') renderMovimientos();
+  if (name==='personas')    renderPersonas();
+  if (name==='agregar')     { populateSelects(); setType(txType);
+    // Si se abre el tab manualmente (no desde editar), resetear modo edición
+    if (!editingId) {
+      document.getElementById('form-title').textContent    = 'tipo de movimiento';
+      document.getElementById('form-save-btn').textContent = 'guardar movimiento';
+      document.getElementById('form-cancel-btn').style.display = 'none';
+    }
+  }
+}
+
+// ── Init ──
+const now = new Date();
+document.getElementById('f-date').value = now.toISOString().slice(0,10);
+document.getElementById('current-month-label').textContent =
+  now.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+
+let editingId = null;
+
+load();
+renderAll();
+setType('compartido');
+</script>
+</body>
+</html>

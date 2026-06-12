@@ -120,13 +120,30 @@
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- Pantalla de login (visible hasta autenticarse) -->
+<div id="login-screen" style="display:none; min-height:100vh; background:var(--bg3); display:flex; align-items:center; justify-content:center;">
+  <div style="background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); padding:2.5rem 2rem; max-width:340px; width:90%; text-align:center;">
+    <h2 style="font-size:18px; font-weight:500; margin-bottom:6px;">Expenses: Atelerix & Mephitis</h2>
+    <p style="font-size:13px; color:var(--text2); margin-bottom:1.5rem;">Inicia sesión para continuar</p>
+    <button id="btn-google-login" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 16px;border:0.5px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;justify-content:center;">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18">
+      Continuar con Google
+    </button>
+    <p id="login-error" style="font-size:12px;color:var(--danger);margin-top:1rem;display:none;"></p>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none;">
   <div class="header">
     <div>
       <h1>Expenses: Atelerix & Mephitis</h1>
       <p id="current-month-label"></p>
     </div>
-    <span id="sync-status" style="font-size:12px;color:var(--text3);align-self:center;"></span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span id="sync-status" style="font-size:12px;color:var(--text3);"></span>
+      <button id="btn-logout" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;padding:0;">salir</button>
+    </div>
   </div>
 
   <div class="tabs">
@@ -268,14 +285,17 @@
       Solo puedes eliminar personas sin movimientos registrados.
     </p>
   </div>
-</div>
+</div><!-- fin .app -->
+</div><!-- fin #main-app -->
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- Firebase SDK (módulo ES) -->
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+                                                   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvFwRkvrj6HGkrgZ_BSRdRYEOeKqKy0nw",
@@ -286,9 +306,44 @@ const firebaseConfig = {
   appId: "1:439152620037:web:0aa1dfbacd229dbe08e26c"
 };
 
-const fbApp = initializeApp(firebaseConfig);
-const db    = getFirestore(fbApp);
-const DOC   = doc(db, 'finanzas', 'shared');
+const fbApp    = initializeApp(firebaseConfig);
+const db       = getFirestore(fbApp);
+const auth     = getAuth(fbApp);
+const provider = new GoogleAuthProvider();
+const DOC      = doc(db, 'finanzas', 'shared');
+
+let currentUser = null;
+
+// ── Login / Logout ──
+document.getElementById('btn-google-login').addEventListener('click', async () => {
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    await signInWithPopup(auth, provider);
+  } catch(e) {
+    errEl.textContent = 'No se pudo iniciar sesión. Intenta de nuevo.';
+    errEl.style.display = 'block';
+    console.error(e);
+  }
+});
+
+document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
+
+// ── Observador de sesión ──
+// Controla qué pantalla se muestra según si hay sesión activa
+onAuthStateChanged(auth, user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display     = 'block';
+    document.getElementById('btn-logout').title = user.email;
+    startSync();
+  } else {
+    currentUser = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display     = 'none';
+  }
+});
 
 // ── Estado de sincronización ──
 function setStatus(msg, color) {
@@ -297,6 +352,7 @@ function setStatus(msg, color) {
 }
 
 let _saving = false;
+let _unsubscribe = null; // para detener el listener al cerrar sesión
 
 // ── Guardar en Firestore ──
 async function save() {
@@ -309,41 +365,30 @@ async function save() {
     setTimeout(() => setStatus(''), 3000);
   } catch(e) {
     setStatus('⚠ error al guardar', 'var(--danger)');
-    // Fallback a localStorage
-    try { localStorage.setItem('finanzas_v2_people', JSON.stringify(people));
-          localStorage.setItem('finanzas_v2_data',   JSON.stringify(data)); } catch(_) {}
     console.error(e);
   } finally { _saving = false; }
 }
 
 // ── Escuchar cambios en tiempo real ──
 function startSync() {
+  if (_unsubscribe) _unsubscribe(); // limpiar listener previo
   setStatus('conectando...', 'var(--text2)');
-  onSnapshot(DOC, snap => {
+  _unsubscribe = onSnapshot(DOC, snap => {
     if (snap.exists()) {
       const d = snap.data();
       people = d.people || [];
       data   = d.data   || [];
       setStatus('● en línea', 'var(--success)');
     } else {
-      // Primera vez que se abre: crear con personas por defecto
+      // Primera vez: crear documento con personas por defecto
       people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
       data   = [];
       save();
     }
     renderAll();
   }, err => {
-    setStatus('⚠ sin conexión — datos locales', 'var(--danger)');
+    setStatus('⚠ sin conexión', 'var(--danger)');
     console.error(err);
-    // Fallback a localStorage si no hay internet
-    try {
-      const p = localStorage.getItem('finanzas_v2_people');
-      const d = localStorage.getItem('finanzas_v2_data');
-      if (p) people = JSON.parse(p);
-      if (d) data   = JSON.parse(d);
-      if (!people.length) people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
-    } catch(_) {}
-    renderAll();
   });
 }
 // Paleta de colores para identificar a cada persona visualmente
@@ -515,7 +560,10 @@ function saveTransaction() {
     desc, amount, payer,
     receiver: needsReceiver ? receiver : null,
     participants,
-    date, cat, payment, type: txType
+    date, cat, payment, type: txType,
+    // Quién registró este movimiento
+    createdBy: currentUser ? currentUser.email : 'desconocido',
+    createdByName: currentUser ? (currentUser.displayName || currentUser.email) : 'desconocido'
   };
 
   if (editingId) {
@@ -713,11 +761,12 @@ function renderMovimientos() {
                :                           `pagó ${personName(t.payer)}`;
     const dateStr = new Date(t.date+'T12:00:00').toLocaleDateString('es-MX',{day:'numeric',month:'short'});
     const payLbl  = t.payment==='credito' ? 'crédito' : t.payment==='debito' ? 'débito' : 'efectivo';
+    const byLbl   = t.createdByName ? `· registró ${t.createdByName.split(' ')[0]}` : '';
     return `<div class="tx-item">
       <div class="tx-dot" style="background:${dot}"></div>
       <div class="tx-body">
         <div class="tx-desc">${t.desc}</div>
-        <div class="tx-meta">${dateStr} · ${who} · ${t.cat} · ${payLbl} ${tag}</div>
+        <div class="tx-meta">${dateStr} · ${who} · ${t.cat} · ${payLbl} ${byLbl} ${tag}</div>
       </div>
       <div class="tx-amount">${fmt(t.amount)}</div>
       <button class="tx-edit" onclick="editTransaction(${t.id})" title="Editar">✎</button>
@@ -945,7 +994,7 @@ window.exportAllCSV     = exportAllCSV;
 window.exportXLSX       = exportXLSX;
 window.importCSV        = importCSV;
 
-startSync(); // conecta a Firebase y escucha cambios en tiempo real
+// startSync() es llamado por onAuthStateChanged cuando hay sesión activa
 setType('compartido');
 </script>
 </body>

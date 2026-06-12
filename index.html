@@ -126,6 +126,7 @@
       <h1>Expenses: Atelerix & Mephitis</h1>
       <p id="current-month-label"></p>
     </div>
+    <span id="sync-status" style="font-size:12px;color:var(--text3);align-self:center;"></span>
   </div>
 
   <div class="tabs">
@@ -270,7 +271,81 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script>
+
+<!-- Firebase SDK (módulo ES) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvFwRkvrj6HGkrgZ_BSRdRYEOeKqKy0nw",
+  authDomain: "finanzas-ae-e376b.firebaseapp.com",
+  projectId: "finanzas-ae-e376b",
+  storageBucket: "finanzas-ae-e376b.firebasestorage.app",
+  messagingSenderId: "439152620037",
+  appId: "1:439152620037:web:0aa1dfbacd229dbe08e26c"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db    = getFirestore(fbApp);
+const DOC   = doc(db, 'finanzas', 'shared');
+
+// ── Estado de sincronización ──
+function setStatus(msg, color) {
+  const el = document.getElementById('sync-status');
+  if (el) { el.textContent = msg; el.style.color = color || 'var(--text3)'; }
+}
+
+let _saving = false;
+
+// ── Guardar en Firestore ──
+async function save() {
+  if (_saving) return;
+  _saving = true;
+  try {
+    setStatus('guardando...', 'var(--text2)');
+    await setDoc(DOC, { people, data });
+    setStatus('✓ sincronizado', 'var(--success)');
+    setTimeout(() => setStatus(''), 3000);
+  } catch(e) {
+    setStatus('⚠ error al guardar', 'var(--danger)');
+    // Fallback a localStorage
+    try { localStorage.setItem('finanzas_v2_people', JSON.stringify(people));
+          localStorage.setItem('finanzas_v2_data',   JSON.stringify(data)); } catch(_) {}
+    console.error(e);
+  } finally { _saving = false; }
+}
+
+// ── Escuchar cambios en tiempo real ──
+function startSync() {
+  setStatus('conectando...', 'var(--text2)');
+  onSnapshot(DOC, snap => {
+    if (snap.exists()) {
+      const d = snap.data();
+      people = d.people || [];
+      data   = d.data   || [];
+      setStatus('● en línea', 'var(--success)');
+    } else {
+      // Primera vez que se abre: crear con personas por defecto
+      people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
+      data   = [];
+      save();
+    }
+    renderAll();
+  }, err => {
+    setStatus('⚠ sin conexión — datos locales', 'var(--danger)');
+    console.error(err);
+    // Fallback a localStorage si no hay internet
+    try {
+      const p = localStorage.getItem('finanzas_v2_people');
+      const d = localStorage.getItem('finanzas_v2_data');
+      if (p) people = JSON.parse(p);
+      if (d) data   = JSON.parse(d);
+      if (!people.length) people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
+    } catch(_) {}
+    renderAll();
+  });
+}
 // Paleta de colores para identificar a cada persona visualmente
 const PERSON_COLORS = ['#378ADD','#BA7517','#639922','#9B3FC0','#C0403F','#1E9E8F','#E07B39','#5C6BC0'];
 
@@ -285,43 +360,7 @@ let people = [];  // [{ id, name }]
 let data   = [];  // transacciones
 let txType = 'compartido';
 
-// ── Persistencia ──
-function save() {
-  try {
-    localStorage.setItem('finanzas_v2_people', JSON.stringify(people));
-    localStorage.setItem('finanzas_v2_data',   JSON.stringify(data));
-  } catch(e) {}
-}
-
-function load() {
-  try {
-    const p = localStorage.getItem('finanzas_v2_people');
-    const d = localStorage.getItem('finanzas_v2_data');
-    if (p) people = JSON.parse(p);
-    if (d) data   = JSON.parse(d);
-
-    // Migración automática desde versión anterior (A / E como IDs fijos)
-    if (!people.length) {
-      const old = localStorage.getItem('finanzas_pareja_v1');
-      if (old) {
-        const oldData = JSON.parse(old);
-        const idA = uid(), idE = uid();
-        people = [{ id: idA, name: 'A' }, { id: idE, name: 'E' }];
-        data = oldData.map(t => ({
-          ...t,
-          payer:    t.payer    === 'A' ? idA : idE,
-          receiver: t.receiver === 'A' ? idA : t.receiver === 'B' ? idE : null,
-          participants: t.type === 'compartido' ? [idA, idE] : null
-        }));
-        save();
-      } else {
-        // Valores por defecto si no hay datos previos
-        people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
-        save();
-      }
-    }
-  } catch(e) { people = []; data = []; }
-}
+// ── Persistencia — manejada por Firebase arriba ──
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function personName(id)  { return people.find(p => p.id === id)?.name || id; }
@@ -888,11 +927,25 @@ const now = new Date();
 document.getElementById('f-date').value = now.toISOString().slice(0,10);
 document.getElementById('current-month-label').textContent =
   now.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+document.getElementById('type-hint').textContent = TYPE_HINTS['compartido'];
 
 let editingId = null;
 
-load();
-renderAll();
+// Exponer funciones al HTML (requerido con type="module")
+window.switchTab        = switchTab;
+window.setType          = setType;
+window.saveTransaction  = saveTransaction;
+window.cancelEdit       = cancelEdit;
+window.editTransaction  = editTransaction;
+window.deleteTransaction= deleteTransaction;
+window.addPerson        = addPerson;
+window.deletePerson     = deletePerson;
+window.exportCSV        = exportCSV;
+window.exportAllCSV     = exportAllCSV;
+window.exportXLSX       = exportXLSX;
+window.importCSV        = importCSV;
+
+startSync(); // conecta a Firebase y escucha cambios en tiempo real
 setType('compartido');
 </script>
 </body>

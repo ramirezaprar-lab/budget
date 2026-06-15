@@ -19,7 +19,7 @@
     --radius: 8px; --radius-lg: 12px;
     --success: #3B6D11;   /* verde: balance positivo                */
     --danger:  #A32D2D;   /* rojo: deuda o balance negativo         */
-    --blue:    #378ADD;   /* azul: barras del gráfico categorías    */
+    --blue:    #2c7059;   /* azul: barras del gráfico categorías    */
     --amber:   #BA7517;   /* naranja: dot de gastos personales      */
     --green:   #639922;   /* verde: dot de transferencias           */
     --purple:  #9B3FC0;   /* morado: dot de "pagué por ti"          */
@@ -157,7 +157,7 @@
   <div class="section active" id="tab-resumen">
     <div class="month-selector">
       <label style="font-size:12px;color:var(--text2)">Mes:</label>
-      <select id="month-filter" onchange="renderResumen()"></select>
+      <select id="month-filter" onchange="onMonthChange('month-filter')"></select>
     </div>
     <div class="metric-grid" id="metrics-top"></div>
     <div class="card">
@@ -251,12 +251,8 @@
   <div class="section" id="tab-movimientos">
     <div class="month-selector">
       <label style="font-size:12px;color:var(--text2)">Mes:</label>
-      <select id="month-filter2" onchange="renderMovimientos()"></select>
-      <label style="font-size:12px;color:var(--text2);margin-left:8px;">Orden:</label>
-      <select id="sort-order" onchange="renderMovimientos()" style="font-size:13px;color:var(--text);background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-family:inherit;">
-        <option value="desc">Más reciente</option>
-        <option value="asc">Más antiguo</option>
-      </select>
+      <select id="month-filter2" onchange="onMonthChange('month-filter2')"></select>
+      <button id="sort-btn" onclick="toggleSort()" title="Cambiar orden" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:16px;cursor:pointer;line-height:1;">🔽</button>
     </div>
     <div class="export-row">
       <span>Exportar:</span>
@@ -605,14 +601,27 @@ function populateMonthSelectors() {
   const months = getMonths();
   ['month-filter','month-filter2'].forEach(selId => {
     const sel = document.getElementById(selId);
-    const cur = sel.value;
+    const cur = sel.value; // guardar selección actual
     sel.innerHTML = months.map(m => {
       const [y,mo] = m.split('-');
       const label  = new Date(y, mo-1, 1).toLocaleDateString('es-MX',{month:'long',year:'numeric'});
       return `<option value="${m}">${label}</option>`;
     }).join('');
+    // Restaurar selección previa si sigue existiendo, si no dejar el primer mes (más reciente)
     if (cur && months.includes(cur)) sel.value = cur;
   });
+  // Sincronizar ambos selectores al mismo mes
+  const activeMonth = document.getElementById('month-filter').value;
+  document.getElementById('month-filter2').value = activeMonth;
+}
+
+// Sincroniza el mes entre tabs al cambiar
+function onMonthChange(source) {
+  const val = document.getElementById(source).value;
+  document.getElementById('month-filter').value  = val;
+  document.getElementById('month-filter2').value = val;
+  renderResumen();
+  renderMovimientos();
 }
 
 function getSelected(id) { return document.getElementById(id).value; }
@@ -747,11 +756,18 @@ function renderResumen() {
 }
 
 // ── Movimientos ──
+let sortOrder = 'desc'; // 'desc' = más reciente arriba, 'asc' = más antiguo arriba
+
+function toggleSort() {
+  sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+  document.getElementById('sort-btn').textContent = sortOrder === 'desc' ? '🔽' : '🔼';
+  renderMovimientos();
+}
+
 function renderMovimientos() {
   const month = getSelected('month-filter2');
-  const order = document.getElementById('sort-order')?.value || 'desc';
   const txs = filteredData(month).slice().sort((a, b) =>
-    order === 'desc'
+    sortOrder === 'desc'
       ? b.date.localeCompare(a.date) || b.id - a.id
       : a.date.localeCompare(b.date) || a.id - b.id
   );
@@ -1002,6 +1018,8 @@ window.deletePerson     = deletePerson;
 window.exportCSV        = exportCSV;
 window.exportAllCSV     = exportAllCSV;
 window.exportXLSX       = exportXLSX;
+window.onMonthChange    = onMonthChange;
+window.toggleSort       = toggleSort;
 window.importCSV        = importCSV;
 
 // startSync() es llamado por onAuthStateChanged cuando hay sesión activa

@@ -10,7 +10,7 @@
     /* ── COLORES — edita los valores hex para cambiar la apariencia ── */
     --bg:      #ffffff;   /* fondo de tarjetas y formularios        */
     --bg2:     #f8f8f8;   /* fondo de métricas y botones activos    */
-    --bg3:     #afc7d4;   /* fondo general de la página             */
+    --bg3:     #afcfe0;   /* fondo general de la página             */
     --text:    #1a1a1a;   /* texto principal                        */
     --text2:   #2e4853;   /* texto secundario (labels, fechas)      */
     --text3:   #526266;   /* texto muy tenue (placeholders)         */
@@ -19,10 +19,10 @@
     --radius: 8px; --radius-lg: 12px;
     --success: #3B6D11;   /* verde: balance positivo                */
     --danger:  #A32D2D;   /* rojo: deuda o balance negativo         */
-    --blue:    #2c7059;   /* azul: barras del gráfico categorías    */
-    --amber:   #BA7517;   /* naranja: dot de gastos personales      */
-    --green:   #639922;   /* verde: dot de transferencias           */
-    --purple:  #9B3FC0;   /* morado: dot de "pagué por ti"          */
+    --blue:    #1d5727;   /* azul: barras del gráfico categorías    */
+    --amber:   #ba9c17;   /* naranja: dot de gastos personales      */
+    --green:   #229942;   /* verde: dot de transferencias           */
+    --purple:  #863fc0;   /* morado: dot de "pagué por ti"          */
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -38,8 +38,8 @@
   .header h1 { font-size: 22px; font-weight: 500; }
   .header p { font-size: 13px; color: var(--text2); margin-top: 3px; }
   .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
-  .tab { padding: 9px 16px; font-size: 13px; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; font-family: inherit; }
-  .tab.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+  .tab { padding: 9px 16px; font-size: 13px; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; font-family: inherit; border-radius: var(--radius) var(--radius) 0 0; }
+  .tab.active { background: #c8e3c0; color: #1f4a1a; border-bottom-color: #4a8a3f; font-weight: 600; }
   .section { display: none; }
   .section.active { display: block; }
   .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; margin-bottom: 1.25rem; }
@@ -252,7 +252,7 @@
     <div class="month-selector">
       <label style="font-size:12px;color:var(--text2)">Mes:</label>
       <select id="month-filter2" onchange="onMonthChange('month-filter2')"></select>
-      <button id="sort-btn" onclick="toggleSort()" title="Cambiar orden" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:16px;cursor:pointer;line-height:1;">🔽</button>
+      <button id="sort-btn" onclick="toggleSort()" title="Cambiar orden" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;line-height:1;color:#000000;">▼</button>
     </div>
     <div class="export-row">
       <span>Exportar:</span>
@@ -760,7 +760,7 @@ let sortOrder = 'desc'; // 'desc' = más reciente arriba, 'asc' = más antiguo a
 
 function toggleSort() {
   sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
-  document.getElementById('sort-btn').textContent = sortOrder === 'desc' ? '🔽' : '🔼';
+  document.getElementById('sort-btn').textContent = sortOrder === 'desc' ? '▼' : '▲';
   renderMovimientos();
 }
 

@@ -744,7 +744,10 @@ function renderResumen() {
 // ── Movimientos ──
 function renderMovimientos() {
   const month = getSelected('month-filter2');
-  const txs   = filteredData(month).slice().reverse();
+  // Ordenar por fecha descendente (más reciente arriba), y por id como desempate
+  const txs = filteredData(month).slice().sort((a, b) =>
+    b.date.localeCompare(a.date) || b.id - a.id
+  );
   const list  = document.getElementById('tx-list');
   if (!txs.length) { list.innerHTML = '<div class="empty">sin movimientos este mes</div>'; return; }
   list.innerHTML = txs.map(t => {

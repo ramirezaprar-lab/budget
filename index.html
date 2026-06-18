@@ -10,7 +10,7 @@
     /* ── COLORES — edita los valores hex para cambiar la apariencia ── */
     --bg:      #ffffff;   /* fondo de tarjetas y formularios        */
     --bg2:     #f8f8f8;   /* fondo de métricas y botones activos    */
-    --bg3:     #cbe9f1;   /* fondo general de la página             */
+    --bg3:     #afc7d4;   /* fondo general de la página             */
     --text:    #1a1a1a;   /* texto principal                        */
     --text2:   #2e4853;   /* texto secundario (labels, fechas)      */
     --text3:   #526266;   /* texto muy tenue (placeholders)         */
@@ -19,10 +19,10 @@
     --radius: 8px; --radius-lg: 12px;
     --success: #3B6D11;   /* verde: balance positivo                */
     --danger:  #A32D2D;   /* rojo: deuda o balance negativo         */
-    --blue:    #1d5727;   /* azul: barras del gráfico categorías    */
-    --amber:   #ba9c17;   /* naranja: dot de gastos personales      */
-    --green:   #229942;   /* verde: dot de transferencias           */
-    --purple:  #863fc0;   /* morado: dot de "pagué por ti"          */
+    --blue:    #378ADD;   /* azul: barras del gráfico categorías    */
+    --amber:   #BA7517;   /* naranja: dot de gastos personales      */
+    --green:   #639922;   /* verde: dot de transferencias           */
+    --purple:  #9B3FC0;   /* morado: dot de "pagué por ti"          */
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -122,7 +122,7 @@
 <body>
 
 <!-- Pantalla de login (visible hasta autenticarse) -->
-<div id="login-screen" style="display:none; min-height:100vh; background:var(--bg3); display:flex; align-items:center; justify-content:center;">
+<div id="login-screen" style="display:none; min-height:100vh; background:var(--bg3); align-items:center; justify-content:center;">
   <div style="background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); padding:2.5rem 2rem; max-width:340px; width:90%; text-align:center;">
     <h2 style="font-size:18px; font-weight:500; margin-bottom:6px;">Expenses: Atelerix & Mephitis</h2>
     <p style="font-size:13px; color:var(--text2); margin-bottom:1.5rem;">Inicia sesión para continuar</p>
@@ -313,7 +313,10 @@ const auth     = getAuth(fbApp);
 const provider = new GoogleAuthProvider();
 const DOC      = doc(db, 'finanzas', 'shared');
 
-let currentUser = null;
+let currentUser  = null;
+let _saving      = false;
+let _unsubscribe = null; // para detener el listener al cerrar sesión
+let _dataLoaded  = false; // true solo después de recibir datos reales de Firestore
 
 // ── Login / Logout ──
 document.getElementById('btn-google-login').addEventListener('click', async () => {
@@ -334,15 +337,20 @@ document.getElementById('btn-logout').addEventListener('click', () => signOut(au
 // Controla qué pantalla se muestra según si hay sesión activa
 onAuthStateChanged(auth, user => {
   if (user) {
+    const isNewUser = !currentUser || currentUser.uid !== user.uid;
     currentUser = user;
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-app').style.display     = 'block';
     document.getElementById('btn-logout').title = user.email;
-    startSync();
+    // Solo reconectar el listener si es una sesión nueva (evita parpadeo
+    // de "conectando..." cada vez que Firebase refresca el token en segundo plano)
+    if (isNewUser || !_unsubscribe) startSync();
   } else {
     currentUser = null;
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('main-app').style.display     = 'none';
+    if (_unsubscribe) { _unsubscribe(); _unsubscribe = null; }
+    _dataLoaded = false;
   }
 });
 
@@ -352,11 +360,15 @@ function setStatus(msg, color) {
   if (el) { el.textContent = msg; el.style.color = color || 'var(--text3)'; }
 }
 
-let _saving = false;
-let _unsubscribe = null; // para detener el listener al cerrar sesión
-
 // ── Guardar en Firestore ──
 async function save() {
+  // Protección crítica: nunca guardar antes de haber cargado los datos reales.
+  // Sin esto, un guardado disparado en el instante equivocado (ej. al refrescar
+  // el token de sesión) podría sobrescribir todo con arrays vacíos.
+  if (!_dataLoaded) {
+    console.warn('save() bloqueado: los datos aún no se han cargado desde Firestore.');
+    return;
+  }
   if (_saving) return;
   _saving = true;
   try {
@@ -373,23 +385,33 @@ async function save() {
 // ── Escuchar cambios en tiempo real ──
 function startSync() {
   if (_unsubscribe) _unsubscribe(); // limpiar listener previo
+  // Importante: bloquear guardados mientras se reconecta el listener,
+  // para no escribir con datos viejos antes de recibir el estado real.
+  _dataLoaded = false;
   setStatus('conectando...', 'var(--text2)');
   _unsubscribe = onSnapshot(DOC, snap => {
     if (snap.exists()) {
       const d = snap.data();
-      people = d.people || [];
-      data   = d.data   || [];
+      // Solo reemplazar si el documento realmente trae contenido coherente.
+      // Evita que un documento corrupto o recién creado borre el estado en memoria.
+      people = Array.isArray(d.people) ? d.people : [];
+      data   = Array.isArray(d.data)   ? d.data   : [];
+      _dataLoaded = true;
       setStatus('● en línea', 'var(--success)');
+      renderAll();
     } else {
-      // Primera vez: crear documento con personas por defecto
+      // Primera vez que se usa la app: crear documento con personas por defecto
       people = [{ id: uid(), name: 'A' }, { id: uid(), name: 'E' }];
       data   = [];
+      _dataLoaded = true; // permitir este guardado inicial, es intencional
       save();
+      renderAll();
     }
-    renderAll();
   }, err => {
     setStatus('⚠ sin conexión', 'var(--danger)');
     console.error(err);
+    // No tocar _dataLoaded aquí: si ya estaba en true, los datos en memoria
+    // siguen siendo válidos y no se debe bloquear ni permitir un guardado vacío.
   });
 }
 // Paleta de colores para identificar a cada persona visualmente
@@ -405,6 +427,7 @@ const TYPE_HINTS = {
 let people = [];  // [{ id, name }]
 let data   = [];  // transacciones
 let txType = 'compartido';
+let editingId = null; // id del movimiento en edición (null = modo agregar)
 
 // ── Persistencia — manejada por Firebase arriba ──
 
@@ -902,8 +925,8 @@ function importCSV(input) {
       }
       function parsePayment(str) {
         const s = (str||'').toLowerCase();
-        if (s.includes('cr')) return 'credito';
-        if (s.includes('d')) return 'debito';
+        if (s.includes('crédito') || s.includes('credito') || s.includes('credit')) return 'credito';
+        if (s.includes('débito')  || s.includes('debito')  || s.includes('debit'))  return 'debito';
         return 'efectivo';
       }
 
@@ -1003,8 +1026,6 @@ document.getElementById('f-date').value = now.toISOString().slice(0,10);
 document.getElementById('current-month-label').textContent =
   now.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
 document.getElementById('type-hint').textContent = TYPE_HINTS['compartido'];
-
-let editingId = null;
 
 // Exponer funciones al HTML (requerido con type="module")
 window.switchTab        = switchTab;

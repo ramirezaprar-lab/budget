@@ -10,10 +10,10 @@
     /* ── COLORES — edita los valores hex para cambiar la apariencia ── */
     --bg:      #ffffff;   /* fondo de tarjetas y formularios        */
     --bg2:     #f8f8f8;   /* fondo de métricas y botones activos    */
-    --bg3:     #afc7d4;   /* fondo general de la página             */
-    --text:    #1a1a1a;   /* texto principal                        */
-    --text2:   #2e4853;   /* texto secundario (labels, fechas)      */
-    --text3:   #526266;   /* texto muy tenue (placeholders)         */
+    --bg3:     #1f2224;   /* fondo general de la página             */
+    --text:    #c7c7c7;   /* texto principal                        */
+    --text2:   #a8bac2;   /* texto secundario (labels, fechas)      */
+    --text3:   #7e99a0;   /* texto muy tenue (placeholders)         */
     --border:  rgba(0,0,0,0.12);  /* bordes sutiles                 */
     --border2: rgba(0,0,0,0.22);  /* bordes de inputs y selects     */
     --radius: 8px; --radius-lg: 12px;
@@ -294,7 +294,7 @@
 <!-- Firebase SDK (módulo ES) -->
 <script type="module">
 import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot }  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
                                                    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
@@ -317,6 +317,7 @@ let currentUser  = null;
 let _saving      = false;
 let _unsubscribe = null; // para detener el listener al cerrar sesión
 let _dataLoaded  = false; // true solo después de recibir datos reales de Firestore
+let _deletedIds  = new Set(); // ids borrados intencionalmente en esta sesión, para respetar el borrado al fusionar
 
 // ── Login / Logout ──
 document.getElementById('btn-google-login').addEventListener('click', async () => {
@@ -361,10 +362,10 @@ function setStatus(msg, color) {
 }
 
 // ── Guardar en Firestore ──
+// Protección contra escrituras concurrentes: antes de guardar, releemos el
+// documento actual y fusionamos por ID. Si la otra persona agregó algo
+// entre que cargamos los datos y que decidimos guardar, no se pierde.
 async function save() {
-  // Protección crítica: nunca guardar antes de haber cargado los datos reales.
-  // Sin esto, un guardado disparado en el instante equivocado (ej. al refrescar
-  // el token de sesión) podría sobrescribir todo con arrays vacíos.
   if (!_dataLoaded) {
     console.warn('save() bloqueado: los datos aún no se han cargado desde Firestore.');
     return;
@@ -373,6 +374,34 @@ async function save() {
   _saving = true;
   try {
     setStatus('guardando...', 'var(--text2)');
+
+    // Releer el estado actual en el servidor justo antes de escribir
+    const snap = await getDoc(DOC);
+    if (snap.exists()) {
+      const remote = snap.data();
+      const remotePeople = Array.isArray(remote.people) ? remote.people : [];
+      const remoteData   = Array.isArray(remote.data)   ? remote.data   : [];
+
+      // Fusionar personas por id (unión, sin duplicar)
+      const peopleMap = new Map(remotePeople.map(p => [p.id, p]));
+      people.forEach(p => peopleMap.set(p.id, p));
+      people = [...peopleMap.values()];
+
+      // Fusionar movimientos por id:
+      // - Si un id existe en ambos lados, gana la versión local (es la que el usuario acaba de editar/crear)
+      // - Si un id solo existe en el servidor (lo agregó la otra persona mientras tanto), se conserva
+      // - Si un id existía localmente pero ya no está ni local ni remoto, se respeta el borrado local
+      const localIds = new Set(data.map(t => t.id));
+      const dataMap = new Map(remoteData.map(t => [t.id, t]));
+      data.forEach(t => dataMap.set(t.id, t));
+      // Si el usuario borró algo localmente (estaba en remoto pero ya no está en local),
+      // y no fue un borrado accidental por falta de carga, respetamos el borrado:
+      remoteData.forEach(t => {
+        if (!localIds.has(t.id) && _deletedIds.has(t.id)) dataMap.delete(t.id);
+      });
+      data = [...dataMap.values()];
+    }
+
     await setDoc(DOC, { people, data });
     setStatus('✓ sincronizado', 'var(--success)');
     setTimeout(() => setStatus(''), 3000);
@@ -475,6 +504,7 @@ function deletePerson(id) {
   );
   if (inUse) { alert('Esta persona tiene movimientos registrados y no puede eliminarse'); return; }
   people = people.filter(p => p.id !== id);
+  _deletedIds.add(id); // por si acaso, aunque el merge de personas no la traería de vuelta salvo conflicto
   save();
   renderAll();
 }
@@ -608,6 +638,7 @@ function saveTransaction() {
 
 function deleteTransaction(id) {
   if (!confirm('¿Eliminar este movimiento?')) return;
+  _deletedIds.add(id); // recordar que este borrado es intencional, para el merge en save()
   data = data.filter(t => t.id !== id);
   save();
   renderAll();
@@ -723,10 +754,12 @@ function renderResumen() {
   });
 
   // Métricas superiores
-  const avgCompartido = people.length ? totalCompartido / people.length : 0;
+  // Nota: ya no se usa un promedio simple (total/núm. personas) porque no
+  // refleja la realidad cuando los gastos compartidos no incluyen a todos —
+  // gastoPorPersona ya calcula el monto real de cada quien arriba.
   document.getElementById('metrics-top').innerHTML = `
     <div class="metric"><label>total gastado</label><div class="val">${fmt(totalGeneral)}</div><div class="sub">entre todos</div></div>
-    <div class="metric"><label>compartido</label><div class="val">${fmt(totalCompartido)}</div><div class="sub">${fmt(avgCompartido)} c/u aprox.</div></div>
+    <div class="metric"><label>compartido</label><div class="val">${fmt(totalCompartido)}</div><div class="sub">ver detalle abajo</div></div>
     ${people.map(p => `<div class="metric"><label>${p.name}</label><div class="val">${fmt(gastoPorPersona[p.id]||0)}</div></div>`).join('')}
   `;
 

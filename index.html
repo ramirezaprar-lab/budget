@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -7,30 +8,23 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    /* ── COLORES — edita los valores hex para cambiar la apariencia ── */
-    --bg:      #ffffff;   /* fondo de tarjetas y formularios        */
-    --bg2:     #f8f8f8;   /* fondo de métricas y botones activos    */
-    --bg3:     #afc7d4;   /* fondo general de la página             */
-    --text:    #1a1a1a;   /* texto principal                        */
-    --text2:   #2e4853;   /* texto secundario (labels, fechas)      */
-    --text3:   #526266;   /* texto muy tenue (placeholders)         */
-    --border:  rgba(0,0,0,0.12);  /* bordes sutiles                 */
-    --border2: rgba(0,0,0,0.22);  /* bordes de inputs y selects     */
+    /* ── COLORES — tema oscuro neón suave. Edita los hex para ajustar. ── */
+    --bg:      #15161c;   /* fondo de tarjetas y formularios          */
+    --bg2:     #1c1e27;   /* fondo de métricas y botones activos      */
+    --bg3:     #0c0d12;   /* fondo general de la página (más oscuro)  */
+    --text:    #e8e9f3;   /* texto principal                          */
+    --text2:   #9a9cb8;   /* texto secundario (labels, fechas)        */
+    --text3:   #5e6080;   /* texto muy tenue (placeholders)           */
+    --border:  rgba(150,160,255,0.14);  /* bordes sutiles con tinte   */
+    --border2: rgba(150,160,255,0.26);  /* bordes de inputs y selects */
     --radius: 8px; --radius-lg: 12px;
-    --success: #3B6D11;   /* verde: balance positivo                */
-    --danger:  #A32D2D;   /* rojo: deuda o balance negativo         */
-    --blue:    #378ADD;   /* azul: barras del gráfico categorías    */
-    --amber:   #BA7517;   /* naranja: dot de gastos personales      */
-    --green:   #639922;   /* verde: dot de transferencias           */
-    --purple:  #9B3FC0;   /* morado: dot de "pagué por ti"          */
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
-      --text: #e8e7e2; --text2: #9a9990; --text3: #666660;
-      --border: rgba(255,255,255,0.12); --border2: rgba(255,255,255,0.22);
-      --success: #97C459; --danger: #F09595;
-    }
+    --success: #5ef2a3;   /* verde-menta neón: balance positivo       */
+    --danger:  #ff5d8f;   /* rosa neón: deuda o balance negativo      */
+    --blue:    #4dd8ff;   /* cian neón: barras del gráfico categorías */
+    --amber:   #ffc857;   /* ámbar neón: dot de gastos personales     */
+    --green:   #5ef2a3;   /* verde-menta neón: dot de transferencias  */
+    --purple:  #c792ff;   /* lila neón: dot de "pagué por ti"         */
+    --accent:  #4dd8ff;   /* cian neón: tab activo y acentos generales*/
   }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
   .app { max-width: 700px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
@@ -39,7 +33,7 @@
   .header p { font-size: 13px; color: var(--text2); margin-top: 3px; }
   .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 0.5px solid var(--border); }
   .tab { padding: 9px 16px; font-size: 13px; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; font-family: inherit; border-radius: var(--radius) var(--radius) 0 0; }
-  .tab.active { background: #c8e3c0; color: #1f4a1a; border-bottom-color: #4a8a3f; font-weight: 600; }
+  .tab.active { background: rgba(77,216,255,0.12); color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1px rgba(77,216,255,0.25); }
   .section { display: none; }
   .section.active { display: block; }
   .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 10px; margin-bottom: 1.25rem; }
@@ -58,7 +52,7 @@
     background: var(--bg); color: var(--text); width: 100%;
     -webkit-appearance: none; appearance: none;
   }
-  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--text); }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77,216,255,0.15); }
   .radio-group { display: flex; gap: 6px; margin-bottom: 0.5rem; flex-wrap: wrap; }
   .radio-btn { border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 8px 12px; font-size: 12px; text-align: center; cursor: pointer; color: var(--text2); background: var(--bg); transition: all .15s; white-space: nowrap; }
   .radio-btn.active { background: var(--bg2); color: var(--text); border-color: var(--text); font-weight: 500; }
@@ -77,10 +71,10 @@
   .tx-meta { font-size: 11px; color: var(--text2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tx-amount { font-size: 14px; font-weight: 500; white-space: nowrap; }
   .tx-tag { font-size: 10px; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
-  .tag-shared { background: #E6F1FB; color: #0C447C; }
-  .tag-solo { background: #FAEEDA; color: #633806; }
-  .tag-transfer { background: #EAF3DE; color: #27500A; }
-  .tag-pague { background: #F3E8FB; color: #4A0C7C; }
+  .tag-shared { background: rgba(77,216,255,0.14); color: #4dd8ff; }
+  .tag-solo { background: rgba(255,200,87,0.14); color: #ffc857; }
+  .tag-transfer { background: rgba(94,242,163,0.14); color: #5ef2a3; }
+  .tag-pague { background: rgba(199,146,255,0.14); color: #c792ff; }
   .empty { text-align: center; padding: 2.5rem; color: var(--text3); font-size: 13px; }
   .tx-del { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; padding: 0 4px; line-height: 1; }
   .tx-del:hover { color: var(--danger); }
@@ -89,8 +83,8 @@
   .month-selector { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
   .month-selector select { font-size: 13px; color: var(--text); background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 6px 10px; font-family: inherit; }
   .debt-item { border-radius: var(--radius); padding: 10px 14px; margin-bottom: 6px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
-  .debt-item.owes { background: #FAECE7; color: #4A1B0C; }
-  .debt-item.even { background: #EAF3DE; color: #173404; }
+  .debt-item.owes { background: rgba(255,93,143,0.12); color: #ff5d8f; }
+  .debt-item.even { background: rgba(94,242,163,0.12); color: #5ef2a3; }
   .debt-item strong { font-weight: 500; }
   .cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .cat-bar-wrap { flex: 1; height: 5px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
@@ -105,7 +99,7 @@
   .person-del:hover { color: var(--danger); }
   .add-person-row { display: flex; gap: 8px; }
   .add-person-row input { flex: 1; border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; font-family: inherit; background: var(--bg); color: var(--text); }
-  .add-person-row input:focus { outline: none; border-color: var(--text); }
+  .add-person-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77,216,255,0.15); }
   .hint { font-size: 12px; color: var(--text2); margin-bottom: 1rem; padding: 8px 12px; background: var(--bg2); border-radius: var(--radius); }
   .participants-wrap { margin-bottom: 10px; }
   .participants-title { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
@@ -252,7 +246,7 @@
     <div class="month-selector">
       <label style="font-size:12px;color:var(--text2)">Mes:</label>
       <select id="month-filter2" onchange="onMonthChange('month-filter2')"></select>
-      <button id="sort-btn" onclick="toggleSort()" title="Cambiar orden" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;line-height:1;color:#000000;">▼</button>
+      <button id="sort-btn" onclick="toggleSort()" title="Cambiar orden" style="background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius);padding:6px 12px;font-size:14px;font-weight:700;cursor:pointer;line-height:1;color:var(--text);">▼</button>
     </div>
     <div class="export-row">
       <span>Exportar:</span>
@@ -451,7 +445,7 @@ function startSync() {
   });
 }
 // Paleta de colores para identificar a cada persona visualmente
-const PERSON_COLORS = ['#378ADD','#BA7517','#639922','#9B3FC0','#C0403F','#1E9E8F','#E07B39','#5C6BC0'];
+const PERSON_COLORS = ['#4dd8ff','#ffc857','#5ef2a3','#c792ff','#ff5d8f','#5ef2c8','#ff9d5e','#8aa0ff'];
 
 const TYPE_HINTS = {
   compartido:    'El monto se divide en partes iguales entre los participantes seleccionados.',
@@ -837,9 +831,9 @@ function renderMovimientos() {
   const list  = document.getElementById('tx-list');
   if (!txs.length) { list.innerHTML = '<div class="empty">sin movimientos este mes</div>'; return; }
   list.innerHTML = txs.map(t => {
-    const dot = t.type==='compartido'    ? '#378ADD'
-               : t.type==='transferencia'? '#639922'
-               : t.type==='pague'        ? '#9B3FC0' : '#BA7517';
+    const dot = t.type==='compartido'    ? '#4dd8ff'
+               : t.type==='transferencia'? '#5ef2a3'
+               : t.type==='pague'        ? '#c792ff' : '#ffc857';
     const tag = t.type==='compartido'    ? '<span class="tx-tag tag-shared">compartido</span>'
                : t.type==='transferencia'? '<span class="tx-tag tag-transfer">transferencia</span>'
                : t.type==='pague'        ? '<span class="tx-tag tag-pague">pagué por ti</span>'
